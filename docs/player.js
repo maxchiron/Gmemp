@@ -32,6 +32,10 @@ request.onload=function(){
     player = new Player(jsonData);
 }
 
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 /**
  * Player class containing the state of our playlist and where we are in it.
  * Includes all methods for playing, skipping, updating the display, etc.
@@ -79,7 +83,7 @@ Player.prototype = {
     } else {
       sound = data.howl = new Howl({
         src: [media + data.mp3],
-        // html5: true, // Force to HTML5 so that the audio can stream in (best for large files).
+        html5: isMobile(), // Force to HTML5 so that the audio can stream in (best for large files).
         onplay: function() {
           // Display the duration.
           duration.innerHTML = self.formatTime(Math.round(sound.duration()));
@@ -117,6 +121,70 @@ Player.prototype = {
 
     // Begin playing the sound.
     sound.play();
+
+    // 手机系统控制映射
+    if ('mediaSession' in navigator) {
+      const artworkUrl = media + encodeURI(data.pic);
+      const img = new Image();
+
+      const applyMediaSession = (artwork) => {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: data.title,
+          artist: data.artist,
+          album: '',
+          artwork: artwork ? [artwork] : []
+        });
+    
+        navigator.mediaSession.setActionHandler('play', () => {
+          const sound = self.playlist[self.index].howl;
+          sound.play();
+          navigator.mediaSession.playbackState = 'playing';
+          playBtn.style.display = 'none';
+          pauseBtn.style.display = 'block';
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          const sound = self.playlist[self.index].howl;
+          sound.pause();
+          navigator.mediaSession.playbackState = 'paused';
+          playBtn.style.display = 'block';
+          pauseBtn.style.display = 'none';
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => { self.skip('prev'); });
+        navigator.mediaSession.setActionHandler('nexttrack', () => { self.skip('next'); });
+      };
+
+      //默认无图片
+      applyMediaSession(null); 
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const targetSize = 512;
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+    
+        // 计算裁剪区域（居中裁剪）
+        const sourceSize = Math.min(img.width, img.height);
+        const sx = (img.width - sourceSize) / 2;
+        const sy = (img.height - sourceSize) / 2;
+    
+        // 绘制并裁剪图片
+        ctx.drawImage(img,sx, sy,sourceSize, sourceSize,0, 0,targetSize, targetSize);
+
+        // 转换为 Data URL（JPEG 格式，质量 90%）
+        const croppedUrl = canvas.toDataURL('image/jpeg', 0.9);
+    
+        // 传递给 MediaSession
+        applyMediaSession({src: croppedUrl,sizes: `${targetSize}x${targetSize}`,type: 'image/jpeg'});
+      };
+    
+      img.onerror = (err) => {console.warn("图片加载失败，继续使用无图片：", artworkUrl, err);};
+
+      // 开始加载原图
+      img.crossOrigin = 'Anonymous';
+      img.src = artworkUrl;
+    }
 
     // Update the track display.
     track.innerHTML = data.title;
@@ -429,4 +497,4 @@ document.addEventListener('keyup', function(event) {
   else if(event.key == "v"|| event.key === "V"){player.toggleVolume();}
 });
 
-console.log("\n %c Gmemp v3.3 %c https://github.com/Meekdai/Gmemp \n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
+console.log("\n %c Gmemp v3.4.8 %c https://github.com/Meekdai/Gmemp \n", "color: #fff; background-image: linear-gradient(90deg, rgb(47, 172, 178) 0%, rgb(45, 190, 96) 100%); padding:5px 1px;", "background-image: linear-gradient(90deg, rgb(45, 190, 96) 0%, rgb(255, 255, 255) 100%); padding:5px 0;");
